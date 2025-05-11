@@ -1,11 +1,13 @@
-from flask import Flask, render_template, request, redirect, flash
+from flask import Flask, render_template, request, redirect, flash, send_file
 import sqlite3
 from collections import defaultdict
+import csv
+import io
 
 app = Flask(__name__)
-app.secret_key = 'some_secret_key'  # Required for flash messages
+app.secret_key = 'some_secret_key'
 
-# ✅ Reusable DB connection helper
+# Reusable DB connection helper
 def get_db_connection():
     return sqlite3.connect('data/matches.db')
 
@@ -45,7 +47,6 @@ def index():
 
     players = list(batsman_stats.keys())
     runs = [s['runs'] for s in batsman_stats.values()]
-
     bowlers = list(bowler_stats.keys())
     wickets = [s['wickets'] for s in bowler_stats.values()]
 
@@ -75,8 +76,28 @@ def add_stat():
         flash('Entry added successfully!', 'success')
     except Exception as e:
         flash(f'Error adding entry: {e}', 'danger')
-    
+
     return redirect('/')
+
+@app.route('/export')
+def export_csv():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('SELECT * FROM match_stats')
+    rows = c.fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Batsman', 'Bowler', 'Runs', 'Balls', 'Wickets'])  # Header
+    for row in rows:
+        writer.writerow(row)
+
+    output.seek(0)
+    return send_file(io.BytesIO(output.getvalue().encode()),
+                     mimetype='text/csv',
+                     as_attachment=True,
+                     download_name='match_stats.csv')
 
 if __name__ == '__main__':
     print("Initializing DB...")
