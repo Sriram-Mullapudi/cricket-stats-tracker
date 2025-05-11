@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cricket Stats Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-light">
+
+    <div class="container mt-4">
+
+
+        <h1 class="mb-4">Cricket Stats Tracker</h1>
+
+        <!-- Entry Form -->
+        <form action="/add" method="POST" class="row g-2 mb-4">
+            <div class="col-md-2">
+                <input type="text" class="form-control" name="batsman" placeholder="e.g., Kohli" autocomplete="off" required>
+            </div>
+            <div class="col-md-2">
+                <input type="text" class="form-control" name="bowler" placeholder="e.g., Bumrah" autocomplete="off" required>
+            </div>
+            <div class="col-md-2">
+                <input type="number" class="form-control" name="runs" placeholder="Runs" autocomplete="off" required>
+            </div>
+            <div class="col-md-2">
+                <input type="number" class="form-control" name="balls" placeholder="Balls" autocomplete="off" required>
+            </div>
+            <div class="col-md-2">
+                <input type="number" class="form-control" name="wickets" placeholder="Wickets" autocomplete="off" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Add Entry</button>
+            </div>
+        </form>
+
+        <!-- Player Summary Table -->
+        <h2>Player Summary</h2>
+        <table class="table table-bordered table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Player</th>
+                    <th>Total Runs</th>
+                    <th>Balls Faced</th>
+                    <th>Strike Rate</th>
+                    <th>Total Wickets</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player, stat in stats.items() %}
+                <tr>
+                    <td>{{ player }}</td>
+                    <td>{{ stat.runs }}</td>
+                    <td>{{ stat.balls }}</td>
+                    <td>{{ "%.2f"|format((stat.runs / stat.balls * 100) if stat.balls else 0) }}</td>
+                    <td>{{ stat.wickets }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Runs per Player Chart -->
+        <h2 class="mt-5">Runs per Player</h2>
+        <div id="runs-chart" style="width:100%;max-width:700px;height:400px;"></div>
+
+        <!-- Wickets per Bowler Chart -->
+        <h2 class="mt-5">Wickets per Bowler</h2>
+        <div id="wickets-chart" style="width:100%;max-width:700px;height:400px;"></div>
+
+        <script>
+            const players = {{ players | tojson }};
+            const runs = {{ runs | tojson }};
+            const bowlers = {{ bowlers | tojson }};
+            const wickets = {{ wickets | tojson }};
+
+            Plotly.newPlot('runs-chart', [{
+                x: players,
+                y: runs,
+                text: runs,
+                textposition: 'auto',
+                type: 'bar',
+                marker: { color: 'green' }
+            }], {
+                title: 'Total Runs by Player',
+                xaxis: { title: 'Player' },
+                yaxis: { title: 'Runs' }
+            });
+
+            Plotly.newPlot('wickets-chart', [{
+                x: bowlers,
+                y: wickets,
+                text: wickets,
+                textposition: 'auto',
+                type: 'bar',
+                marker: { color: 'orange' }
+            }], {
+                title: 'Total Wickets by Bowler',
+                xaxis: { title: 'Bowler' },
+                yaxis: { title: 'Wickets' }
+            });
+        </script>
+
+    </div>
+
+</body>
+</html>
