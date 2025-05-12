@@ -7,7 +7,6 @@ import io
 app = Flask(__name__)
 app.secret_key = 'some_secret_key'
 
-# Reusable DB connection helper
 def get_db_connection():
     return sqlite3.connect('data/matches.db')
 
@@ -17,7 +16,12 @@ def init_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS match_stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            batsman TEXT, bowler TEXT, runs INTEGER, balls INTEGER, wickets INTEGER
+            batsman TEXT,
+            bowler TEXT,
+            runs INTEGER,
+            balls INTEGER,
+            wickets INTEGER,
+            match_date TEXT
         )
     ''')
     conn.commit()
@@ -64,13 +68,14 @@ def add_stat():
         runs = int(request.form['runs'])
         balls = int(request.form['balls'])
         wickets = int(request.form['wickets'])
+        match_date = request.form['match_date']
 
         conn = get_db_connection()
         c = conn.cursor()
         c.execute('''
-            INSERT INTO match_stats (batsman, bowler, runs, balls, wickets)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (batsman, bowler, runs, balls, wickets))
+            INSERT INTO match_stats (batsman, bowler, runs, balls, wickets, match_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (batsman, bowler, runs, balls, wickets, match_date))
         conn.commit()
         conn.close()
         flash('Entry added successfully!', 'success')
@@ -89,7 +94,7 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Batsman', 'Bowler', 'Runs', 'Balls', 'Wickets'])  # Header
+    writer.writerow(['ID', 'Batsman', 'Bowler', 'Runs', 'Balls', 'Wickets', 'Match Date'])
     for row in rows:
         writer.writerow(row)
 
