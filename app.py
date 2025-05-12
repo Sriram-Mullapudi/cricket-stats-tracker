@@ -54,11 +54,18 @@ def index():
     bowlers = list(bowler_stats.keys())
     wickets = [s['wickets'] for s in bowler_stats.values()]
 
+    # ✅ Fixed Indentation for match_date_map
+    match_date_map = {}
+    for row in data:
+        if row[1] not in match_date_map:
+            match_date_map[row[1]] = row[6]
+
     return render_template('index.html',
                            data=data,
                            stats=batsman_stats,
                            players=players, runs=runs,
-                           bowlers=bowlers, wickets=wickets)
+                           bowlers=bowlers, wickets=wickets,
+                           match_date_map=match_date_map)
 
 @app.route('/add', methods=['POST'])
 def add_stat():
