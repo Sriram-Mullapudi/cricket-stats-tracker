@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CricMetrics — Cricket Analytics Dashboard</title>
+<meta name="description" content="Premium cricket performance analytics. Batting, bowling, form trends, impact scores."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+/* ══ TOKENS ══════════════════════════════════════════════════════════════════ */
+:root {
+  --bg:#06090d; --bg1:#0b1018; --bg2:#101820; --bg3:#182030; --bg4:#202d3e;
+  --t0:#edf2f7; --t1:#c8d8e8; --t2:#7a98b0; --t3:#3d5568; --t4:#1e2e3a;
+  --gold:#f5c842; --gd:rgba(245,200,66,.10); --gd2:rgba(245,200,66,.20);
+  --green:#22d07a; --gn:rgba(34,208,122,.10); --gn2:rgba(34,208,122,.20);
+  --red:#f4415a; --rn:rgba(244,65,90,.10);
+  --blue:#4f9cf9; --bn:rgba(79,156,249,.10);
+  --purple:#a78bfa; --orange:#ff6b35;
+  --r0:rgba(255,255,255,.04); --r1:rgba(255,255,255,.08); --r2:rgba(255,255,255,.15);
+  --disp:'Bebas Neue',sans-serif;
+  --body:'DM Sans',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --spring:cubic-bezier(.34,1.56,.64,1);
+  --rad:8px; --rad2:14px; --rad3:20px;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+}
+/* ══ RESET ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:var(--body);background:var(--bg);color:var(--t1);
+  line-height:1.6;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+a{color:inherit;text-decoration:none}
+button{font-family:var(--body)}
+input,select{font-family:var(--body)}
+
+/* ══ BACKGROUND SYSTEM ═══════════════════════════════════════════════════════ */
+#bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-grid{position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(ellipse 85% 75% at 50% 0%,black 0%,transparent 100%);
+  animation:gpulse 12s ease-in-out infinite alternate}
+@keyframes gpulse{0%{opacity:.2}100%{opacity:.6}}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);
+  animation:ofloat 22s ease-in-out infinite alternate}
+@keyframes ofloat{0%{transform:translate(0,0)}50%{transform:translate(26px,-16px)}100%{transform:translate(-14px,12px)}}
+.pitch-lines{position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:180px;height:50%;
+  background:repeating-linear-gradient(0deg,transparent,transparent 52px,
+    rgba(34,208,122,.018) 52px,rgba(34,208,122,.018) 54px);
+  border-left:1px solid rgba(34,208,122,.03);border-right:1px solid rgba(34,208,122,.03)}
+#grain{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.4;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.028'/%3E%3C/svg%3E")}
+#scroll-prog{position:fixed;top:0;left:0;z-index:700;height:2px;width:0;
+  background:linear-gradient(90deg,var(--green),var(--gold),var(--green));
+  background-size:200%;animation:shimmer 2.5s linear infinite;
+  box-shadow:0 0 8px rgba(34,208,122,.4)}
+@keyframes shimmer{0%{background-position:200%}100%{background-position:0%}}
+
+/* ══ NAVIGATION ══════════════════════════════════════════════════════════════ */
+nav{position:sticky;top:0;z-index:600;
+  background:rgba(6,9,13,.88);backdrop-filter:blur(28px) saturate(160%);
+  border-bottom:1px solid var(--r0)}
+.nav-in{max-width:1320px;margin:0 auto;padding:0 28px;height:56px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-mark{font-family:var(--disp);font-size:1.55rem;letter-spacing:.1em;
+  background:linear-gradient(135deg,var(--green) 0%,var(--gold) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo-sub{font-family:var(--mono);font-size:.5rem;color:var(--t3);
+  -webkit-text-fill-color:var(--t3);letter-spacing:.18em;text-transform:uppercase;margin-top:1px}
+.nav-center{display:flex;gap:2px;list-style:none}
+.nav-center a{font-size:.75rem;color:var(--t2);padding:5px 13px;
+  border-radius:var(--rad);transition:all .18s;letter-spacing:.02em}
+.nav-center a:hover{color:var(--t0);background:var(--bg3)}
+.nav-center a.active{color:var(--green);background:var(--gn)}
+.nav-right{display:flex;align-items:center;gap:8px}
+.live-pill{display:flex;align-items:center;gap:5px;
+  font-family:var(--mono);font-size:.6rem;color:var(--green);
+  border:1px solid rgba(34,208,122,.25);border-radius:100px;padding:3px 11px}
+.ldot{width:5px;height:5px;border-radius:50%;background:var(--green);
+  animation:blink 2.5s ease infinite}
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.8)}}
+.theme-btn{background:none;border:1px solid var(--r1);border-radius:var(--rad);
+  color:var(--t3);padding:5px 9px;cursor:pointer;font-size:.75rem;transition:all .18s}
+.theme-btn:hover{color:var(--t1);border-color:var(--r2)}
+
+/* ══ LAYOUT ══════════════════════════════════════════════════════════════════ */
+.site{max-width:1320px;margin:0 auto;padding:0 28px;position:relative;z-index:10}
+section{padding-bottom:var(--space-10)}
+
+/* ══ HERO ════════════════════════════════════════════════════════════════════ */
+.hero{padding:52px 0 36px;border-bottom:1px solid var(--r0);margin-bottom:36px}
+.hero-grid{display:grid;grid-template-columns:1fr 300px;gap:32px;align-items:end}
+.hero-eyebrow{font-family:var(--mono);font-size:.63rem;color:var(--green);
+  text-transform:uppercase;letter-spacing:.2em;
+  display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.hero-eyebrow::before{content:'';width:20px;height:1px;background:var(--green);flex-shrink:0}
+h1.hero-title{font-family:var(--disp);font-size:clamp(2.8rem,5vw,4.8rem);
+  letter-spacing:.04em;line-height:.95;color:var(--t0);margin-bottom:12px}
+h1.hero-title .acc{color:var(--gold)}
+h1.hero-title .out{-webkit-text-stroke:1px var(--t3);color:transparent}
+.hero-sub{font-size:.92rem;color:var(--t2);font-weight:300;max-width:400px;
+  line-height:1.75;margin-bottom:22px}
+.hero-chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:.59rem;color:var(--t2);
+  background:var(--bg2);border:1px solid var(--r1);border-radius:100px;
+  padding:3px 11px;letter-spacing:.06em;transition:all .2s;cursor:default}
+.chip:hover{color:var(--t0);border-color:var(--r2)}
+/* Right side of hero — summary card */
+.hero-card{background:var(--bg1);border:1px solid var(--r1);border-radius:var(--rad3);
+  overflow:hidden;position:relative}
+.hero-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--green),var(--gold),var(--green));
+  background-size:200%;animation:shimmer 3s linear infinite}
+.hc-top{padding:12px 16px;border-bottom:1px solid var(--r0);
+  display:flex;align-items:center;justify-content:space-between}
+.hc-label{font-family:var(--mono);font-size:.58rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.12em}
+.hc-ts{font-family:var(--mono);font-size:.56rem;color:var(--t4)}
+.hc-body{padding:16px}
+.hc-row{display:flex;justify-content:space-between;align-items:baseline;
+  padding:8px 0;border-bottom:1px solid var(--r0)}
+.hc-row:last-child{border-bottom:none}
+.hc-key{font-family:var(--mono);font-size:.58rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.1em}
+.hc-val{font-family:var(--disp);font-size:1.15rem;letter-spacing:.04em;color:var(--t0)}
+.hc-val.g{color:var(--gold)}.hc-val.gr{color:var(--green)}
+.hc-val.sm{font-family:var(--body);font-size:.82rem;font-weight:500;letter-spacing:0}
+
+/* ══ SECTION HEADERS ═════════════════════════════════════════════════════════ */
+.sec-hd{display:flex;align-items:baseline;justify-content:space-between;
+  margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--r0)}
+.sec-title{font-family:var(--disp);font-size:1.4rem;letter-spacing:.07em;color:var(--t0)}
+.sec-badge{font-family:var(--mono);font-size:.58rem;color:var(--t3);
+  background:var(--bg2);border:1px solid var(--r0);border-radius:100px;
+  padding:2px 10px;letter-spacing:.08em}
+
+/* ══ GLOBAL FILTERS ══════════════════════════════════════════════════════════ */
+.filter-bar{background:var(--bg1);border:1px solid var(--r0);border-radius:var(--rad2);
+  padding:14px 18px;margin-bottom:28px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.filter-label{font-family:var(--mono);font-size:.58rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.12em;white-space:nowrap}
+.fi,.fs{background:var(--bg2);border:1px solid var(--r1);border-radius:var(--rad);
+  color:var(--t1);font-family:var(--mono);font-size:.72rem;
+  padding:7px 11px;outline:none;transition:border-color .2s,background .2s}
+.fi:focus,.fs:focus{border-color:rgba(34,208,122,.4);background:var(--bg3)}
+.fi::placeholder{color:var(--t3)}.fs option{background:var(--bg2)}
+.fi{min-width:120px}.fs{min-width:110px}
+.filter-active{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.filter-tag{display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--mono);font-size:.58rem;
+  padding:3px 9px;border-radius:100px;
+  background:var(--gn);color:var(--green);border:1px solid rgba(34,208,122,.22)}
+.filter-tag button{background:none;border:none;color:var(--green);
+  cursor:pointer;font-size:.75rem;line-height:1;padding:0}
+.filter-sep{width:1px;height:20px;background:var(--r1)}
+.btn-apply{display:inline-flex;align-items:center;gap:5px;
+  background:var(--green);color:#040d08;border:none;border-radius:var(--rad);
+  font-family:var(--body);font-size:.78rem;font-weight:600;
+  padding:7px 14px;cursor:pointer;transition:all .2s}
+.btn-apply:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 14px rgba(34,208,122,.25)}
+.btn-reset{display:inline-flex;align-items:center;
+  background:none;border:1px solid var(--r1);color:var(--t3);border-radius:var(--rad);
+  font-family:var(--body);font-size:.78rem;padding:7px 12px;cursor:pointer;transition:all .18s}
+.btn-reset:hover{color:var(--red);border-color:rgba(244,65,90,.3)}
+.results-label{font-family:var(--mono);font-size:.6rem;color:var(--t3);
+  margin-left:auto;white-space:nowrap}
+
+/* ══ KPI STRIP ═══════════════════════════════════════════════════════════════ */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:1px;background:var(--r0);border:1px solid var(--r0);
+  border-radius:var(--rad2);overflow:hidden;margin-bottom:32px}
+.kpi{background:var(--bg1);padding:20px 20px;transition:background .2s;
+  position:relative;overflow:hidden;cursor:default;group:true}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;
+  background:linear-gradient(90deg,var(--green),var(--gold));
+  transform:scaleX(0);transform-origin:left;transition:transform .4s var(--ease)}
+.kpi:hover{background:var(--bg2)}.kpi:hover::after{transform:scaleX(1)}
+.kpi-l{font-family:var(--mono);font-size:.56rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;
+  display:flex;align-items:center;gap:5px}
+.kpi-v{font-family:var(--disp);font-size:2rem;letter-spacing:.04em;color:var(--t0);line-height:1}
+.kpi-v.g{color:var(--gold)}.kpi-v.gr{color:var(--green)}
+.kpi-v.sm{font-size:1.1rem;letter-spacing:.01em;font-family:var(--body);font-weight:600}
+.kpi-n{font-size:.68rem;color:var(--t3);margin-top:5px}
+/* Tooltip */
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);
+  left:50%;transform:translateX(-50%);white-space:nowrap;
+  font-family:var(--mono);font-size:.6rem;color:var(--t1);
+  background:var(--bg4);border:1px solid var(--r1);border-radius:6px;
+  padding:4px 9px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:100}
+[data-tip]:hover::after{opacity:1}
+
+/* ══ INSIGHT CARDS ═══════════════════════════════════════════════════════════ */
+.insight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:12px;margin-bottom:32px}
+.insight{background:var(--bg1);border:1px solid var(--r0);border-radius:var(--rad2);
+  padding:16px;display:flex;gap:12px;align-items:flex-start;transition:all .2s}
+.insight:hover{border-color:var(--r1);background:var(--bg2);transform:translateY(-1px)}
+.insight-ico{font-size:1.15rem;flex-shrink:0;margin-top:1px}
+.insight-body{}
+.insight-title{font-family:var(--mono);font-size:.62rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
+.insight-text{font-size:.84rem;color:var(--t1);line-height:1.55}
+.insight-text strong{color:var(--gold)}
+.insight-text .gr{color:var(--green)}
+
+/* ══ ADD ENTRY FORM ══════════════════════════════════════════════════════════ */
+.form-panel{background:var(--bg1);border:1px solid var(--r1);border-radius:var(--rad2);
+  overflow:hidden;margin-bottom:32px;transition:border-color .3s}
+.form-panel:focus-within{border-color:rgba(34,208,122,.3);
+  box-shadow:0 0 0 4px rgba(34,208,122,.04)}
+.fp-top{padding:13px 20px;border-bottom:1px solid var(--r0);
+  display:flex;align-items:center;gap:10px}
+.fp-ico{font-size:.9rem}.fp-lbl{font-family:var(--mono);font-size:.62rem;color:var(--t2);
+  letter-spacing:.08em;text-transform:uppercase}
+.fp-body{padding:18px 20px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:16px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-family:var(--mono);font-size:.56rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.12em}
+.field input,.field select{background:var(--bg2);border:1px solid var(--r1);
+  border-radius:var(--rad);color:var(--t0);font-family:var(--body);font-size:.85rem;
+  padding:9px 12px;outline:none;transition:border-color .2s,background .2s;width:100%}
+.field input:focus,.field select:focus{border-color:rgba(34,208,122,.45);background:var(--bg3)}
+.field input::placeholder{color:var(--t3)}.field select option{background:var(--bg2)}
+.btn-add{width:100%;padding:12px;
+  background:linear-gradient(135deg,#16a34a,var(--green));
+  color:#040d08;border:none;border-radius:var(--rad);
+  font-family:var(--body);font-size:.86rem;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:opacity .2s,transform .25s var(--spring),box-shadow .2s}
+.btn-add:hover{opacity:.92;transform:translateY(-2px);box-shadow:0 8px 24px rgba(34,208,122,.22)}
+.btn-add:active{transform:scale(.97)}
+
+/* ══ FLASH ═══════════════════════════════════════════════════════════════════ */
+.flash-wrap{margin-bottom:20px}
+.flash{padding:11px 16px;border-radius:var(--rad);font-size:.83rem;margin-bottom:6px;
+  display:flex;align-items:center;gap:8px;animation:fIn .3s var(--ease)}
+@keyframes fIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.flash.success{background:var(--gn);border:1px solid var(--gn2);color:var(--green)}
+.flash.danger{background:var(--rn);border:1px solid rgba(244,65,90,.25);color:var(--red)}
+.flash.info{background:var(--bn);border:1px solid rgba(79,156,249,.25);color:var(--blue)}
+.flash.warning{background:var(--gd);border:1px solid var(--gd2);color:var(--gold)}
+
+/* ══ TAB SWITCHER ════════════════════════════════════════════════════════════ */
+.tab-bar{display:flex;gap:2px;padding:4px;background:var(--bg1);
+  border:1px solid var(--r0);border-radius:var(--rad2);margin-bottom:22px;width:fit-content}
+.tab-btn{font-family:var(--mono);font-size:.66rem;color:var(--t3);
+  background:none;border:none;padding:7px 18px;border-radius:10px;
+  cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all .22s}
+.tab-btn:hover{color:var(--t1)}
+.tab-btn.on{background:var(--bg3);color:var(--t0);
+  box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.tab-pane{display:none}.tab-pane.on{display:block}
+
+/* ══ PLAYER CARDS ════════════════════════════════════════════════════════════ */
+.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));
+  gap:14px;margin-bottom:28px}
+.pcard{background:var(--bg1);border:1px solid var(--r0);border-radius:var(--rad2);
+  overflow:hidden;transition:all .28s var(--ease);position:relative}
+.pcard::before{content:'';position:absolute;inset:-1px;border-radius:var(--rad2);
+  background:linear-gradient(135deg,rgba(34,208,122,.18),rgba(245,200,66,.1));
+  opacity:0;transition:opacity .3s;z-index:-1}
+.pcard:hover{transform:translateY(-3px);
+  box-shadow:0 18px 44px rgba(0,0,0,.36);border-color:var(--r1)}
+.pcard:hover::before{opacity:1}
+/* Card skeleton */
+.pcard.skeleton .pc-top{background:linear-gradient(90deg,var(--bg2) 25%,var(--bg3) 50%,var(--bg2) 75%);
+  background-size:200%;animation:skel 1.4s ease infinite}
+@keyframes skel{0%{background-position:200%}100%{background-position:-200%}}
+.pc-top{padding:14px 16px;background:linear-gradient(135deg,var(--bg2),var(--bg1));
+  border-bottom:1px solid var(--r0);display:flex;align-items:center;gap:12px;position:relative}
+.pc-top::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--team-color, var(--green));opacity:.6}
+.pc-avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,var(--bg3),var(--bg4));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--disp);font-size:1rem;letter-spacing:.05em;
+  color:var(--gold);border:1px solid rgba(245,200,66,.2)}
+.pc-meta{flex:1;min-width:0}
+.pc-name{font-weight:500;color:var(--t0);font-size:.88rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-role{font-family:var(--mono);font-size:.56rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.1em;margin-top:1px}
+.pc-form{display:flex;align-items:center;gap:5px;position:absolute;top:12px;right:14px}
+.form-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.form-dot.hot{background:var(--green);box-shadow:0 0 6px rgba(34,208,122,.5)}
+.form-dot.warm{background:var(--gold);box-shadow:0 0 6px rgba(245,200,66,.4)}
+.form-dot.cold{background:var(--red)}
+.form-txt{font-family:var(--mono);font-size:.56rem;color:var(--t3);letter-spacing:.06em}
+/* Stats grid */
+.pc-stats{padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:10px;border-bottom:1px solid var(--r0)}
+.pc-stat{}
+.pc-sl{font-family:var(--mono);font-size:.53rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+.pc-sv{font-family:var(--disp);font-size:1.15rem;letter-spacing:.04em;color:var(--t0)}
+.pc-sv.g{color:var(--gold)}.pc-sv.gr{color:var(--green)}.pc-sv.b{color:var(--blue)}
+/* Advanced metrics */
+.pc-metrics{padding:10px 16px;border-bottom:1px solid var(--r0);
+  display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pc-metric-bar{display:flex;flex-direction:column;gap:4px}
+.pcm-label{display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:.54rem;color:var(--t3);letter-spacing:.06em}
+.pcm-val{font-size:.54rem;color:var(--t2)}
+.bar-track{height:3px;background:var(--bg4);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .7s var(--ease)}
+.bar-green{background:linear-gradient(90deg,var(--green),rgba(34,208,122,.6))}
+.bar-gold{background:linear-gradient(90deg,var(--gold),rgba(245,200,66,.6))}
+.bar-blue{background:linear-gradient(90deg,var(--blue),rgba(79,156,249,.6))}
+.bar-red{background:linear-gradient(90deg,var(--red),rgba(244,65,90,.6))}
+/* Sparkline */
+.pc-spark{padding:10px 16px 14px}
+.pc-spark-lbl{font-family:var(--mono);font-size:.53rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;
+  display:flex;align-items:center;justify-content:space-between}
+.pc-spark-trend{font-size:.55rem}
+.spark-canvas{width:100%;height:38px}
+/* Recent innings chips */
+.pc-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
+.inn-chip{font-family:var(--mono);font-size:.55rem;padding:2px 7px;border-radius:100px;
+  border:1px solid var(--r0);background:var(--bg2);color:var(--t2)}
+.inn-chip.h{background:rgba(245,200,66,.12);color:var(--gold);border-color:rgba(245,200,66,.22)}
+.inn-chip.g{background:var(--gn);color:var(--green);border-color:rgba(34,208,122,.2)}
+/* Best performance */
+.pc-best{padding:8px 16px;background:rgba(245,200,66,.05);
+  border-top:1px solid rgba(245,200,66,.12);
+  font-family:var(--mono);font-size:.58rem;color:var(--t3);
+  display:flex;align-items:center;justify-content:space-between}
+.pc-best-val{color:var(--gold);font-weight:500}
+
+/* ══ DATA TABLE ══════════════════════════════════════════════════════════════ */
+.tbl-wrap{background:var(--bg1);border:1px solid var(--r0);
+  border-radius:var(--rad2);overflow:auto;margin-bottom:28px}
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:1px solid var(--r1);background:var(--bg2)}
+th{font-family:var(--mono);font-size:.57rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.12em;padding:12px 14px;
+  text-align:left;white-space:nowrap;cursor:pointer;user-select:none;
+  transition:color .18s}
+th:hover{color:var(--t1)}th.r,td.r{text-align:right}
+td{padding:11px 14px;font-size:.83rem;color:var(--t1);border-bottom:1px solid var(--r0)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr{transition:background .14s}
+tbody tr:hover{background:var(--bg2)}
+.tn{font-weight:500;color:var(--t0)}
+.th{font-family:var(--disp);font-size:1.05rem;letter-spacing:.04em}
+.tg{color:var(--gold)}.tgr{color:var(--green)}.tr{color:var(--red)}.tb{color:var(--blue)}
+.pill{display:inline-flex;align-items:center;font-family:var(--mono);
+  font-size:.55rem;padding:2px 8px;border-radius:100px}
+.pill-100{background:rgba(245,200,66,.12);color:var(--gold);border:1px solid rgba(245,200,66,.22)}
+.pill-50{background:var(--gn);color:var(--green);border:1px solid rgba(34,208,122,.2)}
+.sr-bar-wrap{display:flex;align-items:center;gap:8px;min-width:100px}
+.sr-track{flex:1;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.sr-fill{height:100%;border-radius:2px;
+  background:linear-gradient(90deg,var(--green),var(--gold));
+  transition:width .7s var(--ease)}
+.eco-g{color:var(--green)}.eco-y{color:var(--gold)}.eco-r{color:var(--red)}
+.del-btn{background:none;border:1px solid var(--r0);color:var(--t3);
+  border-radius:4px;padding:2px 7px;font-size:.68rem;cursor:pointer;transition:all .18s}
+.del-btn:hover{border-color:rgba(244,65,90,.4);color:var(--red);background:var(--rn)}
+/* Rank badge */
+.rank{display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;font-family:var(--mono);font-size:.6rem;
+  background:var(--bg3);color:var(--t3)}
+.rank-1{background:rgba(245,200,66,.15);color:var(--gold);border:1px solid rgba(245,200,66,.3)}
+.rank-2{background:rgba(192,192,192,.12);color:#c0c0c0}
+.rank-3{background:rgba(205,127,50,.12);color:#cd7f32}
+
+/* ══ CHARTS ══════════════════════════════════════════════════════════════════ */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
+.chart-card{background:var(--bg1);border:1px solid var(--r0);
+  border-radius:var(--rad2);overflow:hidden}
+.chart-card.wide{grid-column:span 2}
+.cc-hd{padding:14px 18px;border-bottom:1px solid var(--r0);
+  display:flex;align-items:center;justify-content:space-between}
+.cc-title{font-family:var(--disp);font-size:.98rem;letter-spacing:.07em;color:var(--t0)}
+.cc-badge{font-family:var(--mono);font-size:.55rem;padding:2px 8px;
+  border-radius:100px;letter-spacing:.07em}
+.cc-bat{color:var(--gold);background:var(--gd);border:1px solid rgba(245,200,66,.18)}
+.cc-bowl{color:var(--green);background:var(--gn);border:1px solid rgba(34,208,122,.18)}
+.cc-both{color:var(--blue);background:var(--bn);border:1px solid rgba(79,156,249,.18)}
+.cc-body{padding:10px}
+.plotly-chart{width:100%;height:270px}
+.plotly-chart.tall{height:310px}
+
+/* ══ COMPARISON SECTION ══════════════════════════════════════════════════════ */
+.compare-panel{background:var(--bg1);border:1px solid var(--r0);
+  border-radius:var(--rad2);overflow:hidden;margin-bottom:28px}
+.cp-hd{padding:14px 18px;border-bottom:1px solid var(--r0);
+  display:flex;align-items:center;gap:12px}
+.cp-selects{display:flex;gap:8px;flex:1}
+.cp-label{font-family:var(--mono);font-size:.6rem;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.12em}
+.cp-body{padding:16px 18px;display:grid;grid-template-columns:1fr 280px;gap:20px}
+.cp-stats{display:flex;flex-direction:column;gap:8px}
+.cp-row{display:grid;grid-template-columns:100px 1fr 90px 1fr 100px;
+  align-items:center;gap:8px;font-family:var(--mono);font-size:.66rem}
+.cp-metric{color:var(--t3);text-align:center;text-transform:uppercase;letter-spacing:.08em}
+.cp-bar-p1{height:4px;border-radius:2px;background:var(--green);
+  transition:width .6s var(--ease);transform-origin:right;margin-left:auto}
+.cp-bar-p2{height:4px;border-radius:2px;background:var(--gold);
+  transition:width .6s var(--ease)}
+.cp-val-1{text-align:right;color:var(--green)}
+.cp-val-2{color:var(--gold)}
+
+/* ══ MATCH HISTORY ═══════════════════════════════════════════════════════════ */
+.match-list{display:flex;flex-direction:column;gap:8px;margin-bottom:28px}
+.match-row{background:var(--bg1);border:1px solid var(--r0);
+  border-radius:var(--rad2);padding:13px 18px;
+  display:flex;align-items:center;gap:14px;transition:all .2s}
+.match-row:hover{background:var(--bg2);border-color:var(--r1);transform:translateX(2px)}
+.mr-date{font-family:var(--mono);font-size:.6rem;color:var(--t3);
+  white-space:nowrap;min-width:88px}
+.mr-name{font-weight:500;color:var(--t0);flex:1;font-size:.85rem}
+.mr-tags{display:flex;gap:7px}
+.mr-tag{font-family:var(--mono);font-size:.58rem;padding:3px 10px;border-radius:100px}
+.mrt-r{background:var(--gd);color:var(--gold);border:1px solid rgba(245,200,66,.2)}
+.mrt-w{background:var(--rn);color:var(--red);border:1px solid rgba(244,65,90,.2)}
+.mrt-e{background:var(--bg3);color:var(--t2);border:1px solid var(--r0)}
+.mrt-6{background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)}
+
+/* ══ LOG SECTION ═════════════════════════════════════════════════════════════ */
+.log-list{display:flex;flex-direction:column;gap:7px;margin-bottom:28px}
+.log-item{background:var(--bg1);border:1px solid var(--r0);border-radius:var(--rad);
+  padding:10px 14px;display:flex;align-items:center;gap:12px;transition:all .18s}
+.log-item:hover{background:var(--bg2);border-color:var(--r1)}
+.log-date{font-family:var(--mono);font-size:.58rem;color:var(--t3);
+  white-space:nowrap;min-width:72px}
+.log-vs{font-size:.82rem;color:var(--t1);flex:1}
+.log-vs strong{color:var(--t0)}
+.log-tags{display:flex;gap:5px;flex-wrap:wrap}
+.lt{font-family:var(--mono);font-size:.56rem;padding:2px 8px;border-radius:100px}
+.lt-r{background:var(--gd);color:var(--gold);border:1px solid rgba(245,200,66,.2)}
+.lt-w{background:var(--rn);color:var(--red);border:1px solid rgba(244,65,90,.2)}
+.lt-b{background:var(--bg3);color:var(--t2);border:1px solid var(--r0)}
+.lt-4{background:var(--bn);color:var(--blue);border:1px solid rgba(79,156,249,.2)}
+.lt-6{background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)}
+
+/* ══ EXPORT BAR ══════════════════════════════════════════════════════════════ */
+.export-bar{border-top:1px solid var(--r0);padding:24px 0 48px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.btn-export{display:inline-flex;align-items:center;gap:7px;
+  background:var(--bg2);color:var(--t2);border:1px solid var(--r1);
+  border-radius:var(--rad);font-family:var(--body);font-size:.82rem;
+  padding:9px 18px;text-decoration:none;transition:all .2s}
+.btn-export:hover{color:var(--t0);border-color:var(--r2);
+  background:var(--bg3);transform:translateY(-1px)}
+.btn-export.primary{background:linear-gradient(135deg,var(--green),#16a34a);
+  color:#040d08;border-color:transparent}
+.btn-export.primary:hover{opacity:.9;box-shadow:0 6px 18px rgba(34,208,122,.22)}
+.export-note{font-size:.76rem;color:var(--t3);margin-left:auto}
+
+/* ══ EMPTY STATE ═════════════════════════════════════════════════════════════ */
+.empty{text-align:center;padding:52px 24px;background:var(--bg1);
+  border:1px dashed var(--r1);border-radius:var(--rad2)}
+.empty-ico{font-size:2.6rem;margin-bottom:12px;opacity:.3}
+.empty-t{font-family:var(--disp);font-size:1.2rem;letter-spacing:.06em;
+  color:var(--t2);margin-bottom:6px}
+.empty-s{font-size:.8rem;color:var(--t3)}
+
+/* ══ SCROLL REVEAL ═══════════════════════════════════════════════════════════ */
+.rv{opacity:0;transform:translateY(15px);
+  transition:opacity .55s var(--ease),transform .55s var(--ease)}
+.rv.in{opacity:1;transform:none}
+.d1{transition-delay:.07s}.d2{transition-delay:.14s}.d3{transition-delay:.21s}
+
+/* ══ RESPONSIVE ══════════════════════════════════════════════════════════════ */
+@media(max-width:1024px){
+  .hero-grid{grid-template-columns:1fr}
+  .hero-card{display:none}
+  .charts-grid{grid-template-columns:1fr}
+  .chart-card.wide{grid-column:span 1}
+  .cp-body{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  .site{padding:0 16px}
+  .nav-center{display:none}
+  h1.hero-title{font-size:2.6rem}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .player-grid{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr 1fr}
+  .filter-bar{flex-direction:column;align-items:stretch}
+  .fi,.fs{min-width:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ BACKGROUND ═══════════════════════════════════════ -->
+<div id="bg">
+  <div class="bg-grid"></div>
+  <div class="pitch-lines"></div>
+  <div class="orb" style="width:640px;height:640px;top:-14%;left:-8%;background:radial-gradient(circle,rgba(34,208,122,.07),transparent 70%);animation-duration:26s"></div>
+  <div class="orb" style="width:500px;height:500px;top:42%;right:-6%;background:radial-gradient(circle,rgba(79,156,249,.06),transparent 70%);animation-duration:32s;animation-delay:-9s"></div>
+  <div class="orb" style="width:380px;height:380px;bottom:8%;left:26%;background:radial-gradient(circle,rgba(245,200,66,.05),transparent 70%);animation-duration:22s;animation-delay:-15s"></div>
+</div>
+<div id="grain"></div>
+<div id="scroll-prog"></div>
+
+<!-- ══ NAV ══════════════════════════════════════════════ -->
+<nav id="nav">
+  <div class="nav-in">
+    <div class="logo">
+      <div>
+        <div class="logo-mark">CricMetrics</div>
+        <div class="logo-sub">Analytics Platform</div>
+      </div>
+    </div>
+    <ul class="nav-center">
+      <li><a href="#overview" class="active">Overview</a></li>
+      <li><a href="#batting">Batting</a></li>
+      <li><a href="#bowling">Bowling</a></li>
+      <li><a href="#charts">Charts</a></li>
+      <li><a href="#compare">Compare</a></li>
+      <li><a href="#matches">Matches</a></li>
+    </ul>
+    <div class="nav-right">
+      <div class="live-pill"><span class="ldot"></span>Live</div>
+      <span style="font-family:var(--mono);font-size:.58rem;color:var(--t3)">{{ last_updated }}</span>
+    </div>
+  </div>
+</nav>
+
+<main class="site">
+
+<!-- ══ HERO ══════════════════════════════════════════════ -->
+<div class="hero rv" id="overview">
+  <div class="hero-grid">
+    <div>
+      <div class="hero-eyebrow">Cricket Performance Analytics</div>
+      <h1 class="hero-title">MATCH<br/><span class="acc">STATS</span><br/><span class="out">TRACKER</span></h1>
+      <p class="hero-sub">Advanced batting & bowling analytics with Impact Scores, Form Indices, and interactive visualisations — all in real time.</p>
+      <div class="hero-chips">
+        <span class="chip">Python · Flask</span>
+        <span class="chip">SQLite · REST API</span>
+        <span class="chip">Plotly.js</span>
+        <span class="chip">Impact Score</span>
+        <span class="chip">Form Index</span>
+        <span class="chip">Consistency Score</span>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="hc-top">
+        <span class="hc-label">Session Summary</span>
+        <span class="hc-ts">{{ last_updated }}</span>
+      </div>
+      <div class="hc-body">
+        <div class="hc-row"><span class="hc-key">Total Runs</span><span class="hc-val g" id="hc-runs">{{ sm.runs }}</span></div>
+        <div class="hc-row"><span class="hc-key">Wickets</span><span class="hc-val gr" id="hc-wkts">{{ sm.wickets }}</span></div>
+        <div class="hc-row"><span class="hc-key">Avg Run Rate</span><span class="hc-val gr">{{ sm.avg_rr }}</span></div>
+        <div class="hc-row"><span class="hc-key">Highest Score</span><span class="hc-val g">{{ sm.highest }}</span></div>
+        <div class="hc-row"><span class="hc-key">Top Scorer</span><span class="hc-val sm">{{ sm.top_scorer }}</span></div>
+        <div class="hc-row"><span class="hc-key">Best Wickets</span><span class="hc-val sm">{{ sm.top_wickets }}</span></div>
+        <div class="hc-row"><span class="hc-key">Best Economy</span><span class="hc-val sm">{{ sm.best_eco_player }} ({{ sm.best_eco }})</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FLASH -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-wrap">
+  {% for cat,msg in messages %}<div class="flash {{ cat }}">{{ '✓' if cat=='success' else ('✗' if cat=='danger' else '→') }} {{ msg }}</div>{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<!-- ══ GLOBAL FILTERS ══════════════════════════════════ -->
+<form method="GET" action="/" class="filter-bar rv d1" id="filter-form">
+  <span class="filter-label">Filters</span>
+  <div class="filter-sep"></div>
+  <input type="text" name="player" class="fi" placeholder="Player name…" value="{{ filters.player }}"/>
+  <input type="text" name="match" class="fi" placeholder="Match name…" value="{{ filters.match }}"/>
+  <input type="date" name="date_from" class="fi" value="{{ filters.date_from }}" title="From date"/>
+  <input type="date" name="date_to" class="fi" value="{{ filters.date_to }}" title="To date"/>
+  <select name="innings" class="fs">
+    <option value="all" {% if filters.innings=='all' %}selected{% endif %}>All Innings</option>
+    <option value="1" {% if filters.innings=='1' %}selected{% endif %}>Innings 1</option>
+    <option value="2" {% if filters.innings=='2' %}selected{% endif %}>Innings 2</option>
+  </select>
+  <button type="submit" class="btn-apply">⚡ Apply</button>
+  {% if active_filters %}
+  <a href="/" class="btn-reset">✕ Clear</a>
+  {% endif %}
+  {% if active_filters %}
+  <div class="filter-active">
+    {% for k,v in active_filters.items() %}
+    <span class="filter-tag">{{ k }}: {{ v }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <span class="results-label">{{ sm.total_entries }} records {% if active_filters %}(filtered){% endif %}</span>
+</form>
+
+<!-- ══ KPI GRID ════════════════════════════════════════ -->
+<div class="kpi-grid rv d1">
+  <div class="kpi" data-tip="Total runs scored across all entries">
+    <div class="kpi-l">Total Runs</div>
+    <div class="kpi-v g" id="k-runs">{{ sm.runs }}</div>
+    <div class="kpi-n">all innings</div>
+  </div>
+  <div class="kpi" data-tip="Total wickets taken">
+    <div class="kpi-l">Wickets</div>
+    <div class="kpi-v gr" id="k-wkts">{{ sm.wickets }}</div>
+    <div class="kpi-n">falls recorded</div>
+  </div>
+  <div class="kpi" data-tip="Unique match dates + names">
+    <div class="kpi-l">Matches</div>
+    <div class="kpi-v" id="k-matches">{{ sm.matches }}</div>
+    <div class="kpi-n">events logged</div>
+  </div>
+  <div class="kpi" data-tip="Highest individual score">
+    <div class="kpi-l">Highest Score</div>
+    <div class="kpi-v g">{{ sm.highest }}</div>
+    <div class="kpi-n">individual innings</div>
+  </div>
+  <div class="kpi" data-tip="Average runs per over (run rate)">
+    <div class="kpi-l">Avg Run Rate</div>
+    <div class="kpi-v gr">{{ sm.avg_rr }}</div>
+    <div class="kpi-n">runs per over</div>
+  </div>
+  <div class="kpi" data-tip="Best strike rate player">
+    <div class="kpi-l">Best SR</div>
+    <div class="kpi-v">{{ sm.best_sr }}</div>
+    <div class="kpi-n">{{ sm.best_sr_player }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-l">Sixes</div>
+    <div class="kpi-v" id="k-sixes">{{ sm.sixes }}</div>
+    <div class="kpi-n">maximum shots</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-l">Fours</div>
+    <div class="kpi-v" id="k-fours">{{ sm.fours }}</div>
+    <div class="kpi-n">boundaries</div>
+  </div>
+</div>
+
+<!-- ══ INSIGHT CARDS ══════════════════════════════════ -->
+{% if bat %}
+<div class="insight-grid rv d2">
+  {% set top_bat = bat.items()|list|sort(attribute='1.impact')|last %}
+  <div class="insight">
+    <span class="insight-ico">🏆</span>
+    <div class="insight-body">
+      <div class="insight-title">Top Impact Batsman</div>
+      <div class="insight-text"><strong>{{ top_bat[0] }}</strong> leads with an Impact Score of <strong>{{ top_bat[1].impact }}</strong>, averaging <strong>{{ top_bat[1].avg }}</strong> at SR <strong>{{ top_bat[1].sr }}</strong>.</div>
+    </div>
+  </div>
+  {% set most_consistent = bat.items()|list|sort(attribute='1.consistency')|last %}
+  <div class="insight">
+    <span class="insight-ico">📐</span>
+    <div class="insight-body">
+      <div class="insight-title">Most Consistent</div>
+      <div class="insight-text"><strong>{{ most_consistent[0] }}</strong> has the highest Consistency Score of <strong>{{ most_consistent[1].consistency }}</strong> — minimal variance across innings.</div>
+    </div>
+  </div>
+  {% if bowl %}
+  {% set top_bowl = bowl.items()|list|sort(attribute='1.impact')|last %}
+  <div class="insight">
+    <span class="insight-ico">🎳</span>
+    <div class="insight-body">
+      <div class="insight-title">Top Impact Bowler</div>
+      <div class="insight-text"><strong>{{ top_bowl[0] }}</strong> leads bowling with <strong class="gr">{{ top_bowl[1].wickets }} wickets</strong> at economy <strong>{{ top_bowl[1].eco }}</strong>. Control Rating: <strong>{{ top_bowl[1].control }}</strong>.</div>
+    </div>
+  </div>
+  {% set best_eco_bowler = bowl.items()|list|sort(attribute='1.eco')|first %}
+  <div class="insight">
+    <span class="insight-ico">🎯</span>
+    <div class="insight-body">
+      <div class="insight-title">Best Economy</div>
+      <div class="insight-text"><strong>{{ best_eco_bowler[0] }}</strong> is the most economical bowler at <strong>{{ best_eco_bowler[1].eco }}</strong> runs/over over {{ best_eco_bowler[1].overs }} overs.</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ══ ADD ENTRY ══════════════════════════════════════ -->
+<section>
+  <div class="sec-hd rv"><div class="sec-title">ADD ENTRY</div><span class="sec-badge">Record performance</span></div>
+  <div class="form-panel rv d1">
+    <div class="fp-top"><span class="fp-ico">🏏</span><span class="fp-lbl">New match performance record</span></div>
+    <div class="fp-body">
+      <form action="/add" method="POST">
+        <div class="form-grid">
+          <div class="field"><label>Batsman</label><input type="text" name="batsman" placeholder="e.g., Kohli" required autocomplete="off" list="player-list"/></div>
+          <div class="field"><label>Bowler</label><input type="text" name="bowler" placeholder="e.g., Bumrah" required autocomplete="off" list="player-list"/></div>
+          <div class="field"><label>Runs</label><input type="number" name="runs" placeholder="0" min="0" required/></div>
+          <div class="field"><label>Balls Faced</label><input type="number" name="balls" placeholder="1" min="1" required/></div>
+          <div class="field"><label>Wickets</label><input type="number" name="wickets" placeholder="0" min="0" max="10" required/></div>
+          <div class="field"><label>Fours (4s)</label><input type="number" name="fours" placeholder="0" min="0"/></div>
+          <div class="field"><label>Sixes (6s)</label><input type="number" name="sixes" placeholder="0" min="0"/></div>
+          <div class="field"><label>Match Name</label><input type="text" name="match_name" placeholder="IND vs AUS" list="match-list"/></div>
+          <div class="field"><label>Innings</label>
+            <select name="innings"><option value="1">1st Innings</option><option value="2">2nd Innings</option></select>
+          </div>
+          <div class="field"><label>Match Date</label><input type="date" name="match_date" required/></div>
+        </div>
+        <button type="submit" class="btn-add">⚡ Add Performance Record</button>
+      </form>
+      <datalist id="player-list">{% for p in all_players %}<option value="{{ p }}">{% endfor %}</datalist>
+      <datalist id="match-list">{% for m in all_matches %}<option value="{{ m }}">{% endfor %}</datalist>
+    </div>
+  </div>
+</section>
+
+<!-- ══ BATTING DASHBOARD ══════════════════════════════ -->
+<section id="batting">
+  <div class="sec-hd rv"><div class="sec-title">BATTING</div><span class="sec-badge">{{ bat|length }} players</span></div>
+  <div class="tab-bar rv d1">
+    <button class="tab-btn on" onclick="showTab('bat-cards','bat-table',this)">Player Cards</button>
+    <button class="tab-btn" onclick="showTab('bat-table','bat-cards',this)">Stats Table</button>
+  </div>
+
+  <!-- BATTING CARDS -->
+  <div id="bat-cards" class="tab-pane on rv">
+    {% if bat %}
+    <div class="player-grid">
+      {% for player, s in bat.items()|sort(attribute='1.runs',reverse=true) %}
+      {% set fi = loop.index %}
+      <div class="pcard">
+        <div class="pc-top" style="--team-color:var(--gold)">
+          <div class="pc-avatar">{{ player[:2]|upper }}</div>
+          <div class="pc-meta">
+            <div class="pc-name">{{ player }}</div>
+            <div class="pc-role">Batsman · {{ s.innings }} inns</div>
+          </div>
+          <div class="pc-form">
+            <div class="form-dot {% if s.form > 35 %}hot{% elif s.form > 18 %}warm{% else %}cold{% endif %}"></div>
+            <span class="form-txt">{% if s.form > 35 %}HOT{% elif s.form > 18 %}FORM{% else %}COLD{% endif %}</span>
+          </div>
+        </div>
+        <div class="pc-stats">
+          <div class="pc-stat"><div class="pc-sl">Runs</div><div class="pc-sv g">{{ s.runs }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">SR</div><div class="pc-sv gr">{{ s.sr }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Avg</div><div class="pc-sv">{{ s.avg }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">HS</div><div class="pc-sv">{{ s.highest }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">4s/6s</div><div class="pc-sv b">{{ s.fours }}/{{ s.sixes }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Bdry%</div><div class="pc-sv">{{ s.bpct }}%</div></div>
+        </div>
+        <!-- Advanced metrics bars -->
+        <div class="pc-metrics">
+          <div class="pc-metric-bar" data-tip="Composite score: avg×0.4 + SR×0.25 + milestones">
+            <div class="pcm-label"><span>Impact</span><span class="pcm-val">{{ s.impact }}</span></div>
+            <div class="bar-track"><div class="bar-fill bar-gold" style="width:{{ s.impact }}%"></div></div>
+          </div>
+          <div class="pc-metric-bar" data-tip="Inverse of innings variance — higher = more reliable">
+            <div class="pcm-label"><span>Consistency</span><span class="pcm-val">{{ s.consistency }}</span></div>
+            <div class="bar-track"><div class="bar-fill bar-green" style="width:{{ s.consistency }}%"></div></div>
+          </div>
+          <div class="pc-metric-bar" data-tip="Weighted average of last 5 innings (recent = higher weight)">
+            <div class="pcm-label"><span>Form Index</span><span class="pcm-val">{{ s.form }}</span></div>
+            <div class="bar-track"><div class="bar-fill bar-blue" style="width:{{ [s.form/1.2,100]|min }}%"></div></div>
+          </div>
+          <div class="pc-metric-bar" data-tip="Strike rate vs team average benchmark">
+            <div class="pcm-label"><span>Aggression</span><span class="pcm-val">{{ s.aggression }}</span></div>
+            <div class="bar-track"><div class="bar-fill bar-{{ 'gold' if s.aggression > 60 else 'green' }}" style="width:{{ s.aggression }}%"></div></div>
+          </div>
+        </div>
+        <!-- Sparkline -->
+        <div class="pc-spark">
+          <div class="pc-spark-lbl">
+            <span>Last {{ s.run_history|length }} innings</span>
+            <span class="pc-spark-trend">Trend: {% if s.trend > 1 %}<span style="color:var(--green)">↑ improving</span>{% elif s.trend < -1 %}<span style="color:var(--red)">↓ declining</span>{% else %}<span style="color:var(--gold)">→ stable</span>{% endif %}</span>
+          </div>
+          <canvas class="spark-canvas" id="sp-bat-{{ fi }}"
+            data-vals="{{ s.run_history|tojson }}" data-col="#f5c842"></canvas>
+          <!-- Recent innings chips -->
+          <div class="pc-chips">
+            {% for r in s.run_history[-5:] %}
+            <span class="inn-chip {% if r >= 100 %}h{% elif r >= 50 %}g{% endif %}">{{ r }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="pc-best">
+          <span>Best: {{ s.highest }} · {{ s.hundreds }}×100 · {{ s.fifties }}×50</span>
+          <span class="pc-best-val">{{ s.contribution }}% of team runs</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-ico">🏏</div><div class="empty-t">No batting records</div><div class="empty-s">Add entries above to see player cards</div></div>
+    {% endif %}
+  </div>
+
+  <!-- BATTING TABLE -->
+  <div id="bat-table" class="tab-pane">
+    {% if bat %}
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Player</th>
+          <th class="r" data-tip="Total runs">Runs</th>
+          <th class="r">Balls</th><th class="r">4s</th><th class="r">6s</th>
+          <th class="r" data-tip="Strike rate: runs/balls×100">SR</th>
+          <th class="r" data-tip="Batting average">Avg</th>
+          <th class="r">HS</th>
+          <th class="r" data-tip="Boundary percentage">Bdry%</th>
+          <th class="r" data-tip="Impact Score (0-100)">Impact</th>
+          <th class="r" data-tip="Consistency Score (0-100)">Consty</th>
+          <th>Milestones</th>
+          <th class="r">Inns</th>
+        </tr></thead>
+        <tbody>
+          {% for player, s in bat.items()|sort(attribute='1.runs',reverse=true) %}
+          <tr>
+            <td><span class="rank rank-{{ loop.index if loop.index <= 3 else '' }}">{{ loop.index }}</span></td>
+            <td class="tn">{{ player }}</td>
+            <td class="r th tg">{{ s.runs }}</td>
+            <td class="r">{{ s.balls }}</td>
+            <td class="r">{{ s.fours }}</td>
+            <td class="r">{{ s.sixes }}</td>
+            <td class="r">
+              <div class="sr-bar-wrap">
+                <div class="sr-track"><div class="sr-fill" style="width:{{ [s.sr/2.5,100]|min }}%"></div></div>
+                <span>{{ s.sr }}</span>
+              </div>
+            </td>
+            <td class="r">{{ s.avg }}</td>
+            <td class="r tgr">{{ s.highest }}</td>
+            <td class="r">{{ s.bpct }}%</td>
+            <td class="r"><span style="color:{% if s.impact > 70 %}var(--gold){% elif s.impact > 40 %}var(--t1){% else %}var(--t3){% endif %}">{{ s.impact }}</span></td>
+            <td class="r"><span style="color:{% if s.consistency > 70 %}var(--green){% elif s.consistency > 45 %}var(--t1){% else %}var(--t3){% endif %}">{{ s.consistency }}</span></td>
+            <td>
+              {% if s.hundreds %}<span class="pill pill-100">{{ s.hundreds }}×100</span>{% endif %}
+              {% if s.fifties %}<span class="pill pill-50">{{ s.fifties }}×50</span>{% endif %}
+              {% if not s.hundreds and not s.fifties %}—{% endif %}
+            </td>
+            <td class="r">{{ s.innings }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-ico">📋</div><div class="empty-t">No data yet</div><div class="empty-s">Add entries to populate the table</div></div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- ══ BOWLING DASHBOARD ══════════════════════════════ -->
+<section id="bowling">
+  <div class="sec-hd rv"><div class="sec-title">BOWLING</div><span class="sec-badge">{{ bowl|length }} bowlers</span></div>
+  <div class="tab-bar rv d1">
+    <button class="tab-btn on" onclick="showTab('bowl-cards','bowl-table',this)">Player Cards</button>
+    <button class="tab-btn" onclick="showTab('bowl-table','bowl-cards',this)">Stats Table</button>
+  </div>
+
+  <div id="bowl-cards" class="tab-pane on rv">
+    {% if bowl %}
+    <div class="player-grid">
+      {% for bowler, s in bowl.items()|sort(attribute='1.wickets',reverse=true) %}
+      {% set fi = loop.index %}
+      <div class="pcard">
+        <div class="pc-top" style="--team-color:var(--green)">
+          <div class="pc-avatar" style="color:var(--green);border-color:rgba(34,208,122,.2)">{{ bowler[:2]|upper }}</div>
+          <div class="pc-meta">
+            <div class="pc-name">{{ bowler }}</div>
+            <div class="pc-role">Bowler · {{ s.overs }} overs</div>
+          </div>
+          <div class="pc-form">
+            <div class="form-dot {% if s.eco < 6 %}hot{% elif s.eco < 9 %}warm{% else %}cold{% endif %}"></div>
+            <span class="form-txt">ECO {{ s.eco }}</span>
+          </div>
+        </div>
+        <div class="pc-stats">
+          <div class="pc-stat"><div class="pc-sl">Wickets</div><div class="pc-sv gr">{{ s.wickets }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Economy</div><div class="pc-sv" style="color:{% if s.eco < 7 %}var(--green){% elif s.eco < 10 %}var(--gold){% else %}var(--red){% endif %}">{{ s.eco }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Avg</div><div class="pc-sv">{{ s.bavg }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Overs</div><div class="pc-sv">{{ s.overs }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Runs Given</div><div class="pc-sv">{{ s.runs_given }}</div></div>
+          <div class="pc-stat"><div class="pc-sl">Bowl SR</div><div class="pc-sv b">{{ s.sr_bowl }}</div></div>
+        </div>
+        <div class="pc-metrics">
+          <div class="pc-metric-bar">
+            <div class="pcm-label"><span>Impact</span><span class="pcm-val">{{ s.impact }}</span></div>
+            <div class="bar-track"><div class="bar-fill bar-green" style="width:{{ s.impact }}%"></div></div>
+          </div>
+          <div class="pc-metric-bar" data-tip="Bowling control: lower eco + more wickets = higher rating">
+            <div class="pcm-label"><span>Control</span><span class="pcm-val">{{ s.control }}</span></div>
+            <div class="bar-track"><div class="bar-fill bar-blue" style="width:{{ s.control }}%"></div></div>
+          </div>
+        </div>
+        <div class="pc-spark">
+          <div class="pc-spark-lbl">
+            <span>Last {{ s.wkt_history|length }} spells</span>
+            <span class="pc-spark-trend">Trend: {% if s.trend > 0.2 %}<span style="color:var(--green)">↑</span>{% elif s.trend < -0.2 %}<span style="color:var(--red)">↓</span>{% else %}<span style="color:var(--gold)">→</span>{% endif %}</span>
+          </div>
+          <canvas class="spark-canvas" id="sp-bowl-{{ fi }}"
+            data-vals="{{ s.wkt_history|tojson }}" data-col="#22d07a"></canvas>
+          <div class="pc-chips">
+            {% for w in s.wkt_history[-5:] %}
+            <span class="inn-chip {% if w >= 4 %}h{% elif w >= 2 %}g{% endif %}">{{ w }}w</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="pc-best">
+          <span>Best spell: {{ [s.wkt_history]|map('max')|first if s.wkt_history else 0 }}wkt</span>
+          <span class="pc-best-val">{{ s.form }} avg wkts (last 5)</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-ico">🎳</div><div class="empty-t">No bowling records</div><div class="empty-s">Add entries with wickets to see bowler cards</div></div>
+    {% endif %}
+  </div>
+
+  <div id="bowl-table" class="tab-pane">
+    {% if bowl %}
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Bowler</th>
+          <th class="r">Wkts</th><th class="r">Overs</th>
+          <th class="r">Runs</th><th class="r">Economy</th>
+          <th class="r">Avg</th><th class="r">Bowl SR</th>
+          <th class="r">Impact</th><th class="r">Control</th>
+        </tr></thead>
+        <tbody>
+          {% for bowler, s in bowl.items()|sort(attribute='1.wickets',reverse=true) %}
+          <tr>
+            <td><span class="rank rank-{{ loop.index if loop.index <= 3 else '' }}">{{ loop.index }}</span></td>
+            <td class="tn">{{ bowler }}</td>
+            <td class="r th tgr">{{ s.wickets }}</td>
+            <td class="r">{{ s.overs }}</td>
+            <td class="r">{{ s.runs_given }}</td>
+            <td class="r">
+              <span class="eco-{% if s.eco < 7 %}g{% elif s.eco < 10 %}y{% else %}r{% endif %}">{{ s.eco }}</span>
+            </td>
+            <td class="r">{{ s.bavg }}</td>
+            <td class="r">{{ s.sr_bowl }}</td>
+            <td class="r"><span style="color:{% if s.impact > 60 %}var(--green){% else %}var(--t2){% endif %}">{{ s.impact }}</span></td>
+            <td class="r"><span style="color:{% if s.control > 60 %}var(--blue){% else %}var(--t2){% endif %}">{{ s.control }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-ico">📋</div><div class="empty-t">No data</div></div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- ══ CHARTS ══════════════════════════════════════════ -->
+<section id="charts">
+  <div class="sec-hd rv"><div class="sec-title">CHARTS</div><span class="sec-badge">Plotly · Interactive</span></div>
+  <div class="charts-grid rv d1">
+    <div class="chart-card">
+      <div class="cc-hd"><div class="cc-title">RUNS BY PLAYER</div><span class="cc-badge cc-bat">BATTING</span></div>
+      <div class="cc-body"><div class="plotly-chart" id="ch-runs"></div></div>
+    </div>
+    <div class="chart-card">
+      <div class="cc-hd"><div class="cc-title">STRIKE RATE</div><span class="cc-badge cc-bat">BATTING</span></div>
+      <div class="cc-body"><div class="plotly-chart" id="ch-sr"></div></div>
+    </div>
+    <div class="chart-card">
+      <div class="cc-hd"><div class="cc-title">WICKETS BY BOWLER</div><span class="cc-badge cc-bowl">BOWLING</span></div>
+      <div class="cc-body"><div class="plotly-chart" id="ch-wkt"></div></div>
+    </div>
+    <div class="chart-card">
+      <div class="cc-hd"><div class="cc-title">ECONOMY RATE</div><span class="cc-badge cc-bowl">BOWLING</span></div>
+      <div class="cc-body"><div class="plotly-chart" id="ch-eco"></div></div>
+    </div>
+    <div class="chart-card wide">
+      <div class="cc-hd"><div class="cc-title">RUNS vs STRIKE RATE — BATTING PROFILE</div><span class="cc-badge cc-both">SCATTER</span></div>
+      <div class="cc-body"><div class="plotly-chart tall" id="ch-scatter"></div></div>
+    </div>
+    <div class="chart-card wide">
+      <div class="cc-hd"><div class="cc-title">IMPACT SCORE RANKING</div><span class="cc-badge cc-bat">ADVANCED</span></div>
+      <div class="cc-body"><div class="plotly-chart" id="ch-impact"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ PLAYER COMPARISON ══════════════════════════════ -->
+<section id="compare">
+  <div class="sec-hd rv"><div class="sec-title">PLAYER COMPARISON</div><span class="sec-badge">Select 2 players</span></div>
+  {% if players|length >= 2 %}
+  <div class="compare-panel rv d1">
+    <div class="cp-hd">
+      <span style="font-family:var(--mono);font-size:.6rem;color:var(--t3)">Compare</span>
+      <div class="cp-selects">
+        <select class="fs" id="cmp-p1" onchange="renderComparison()">
+          {% for p in players %}<option value="{{ p }}" {% if loop.first %}selected{% endif %}>{{ p }}</option>{% endfor %}
+        </select>
+        <span style="font-family:var(--mono);font-size:.75rem;color:var(--t3);align-self:center">vs</span>
+        <select class="fs" id="cmp-p2" onchange="renderComparison()">
+          {% for p in players %}<option value="{{ p }}" {% if loop.index == 2 %}selected{% endif %}>{{ p }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="cp-body">
+      <div id="cmp-bars" class="cp-stats"></div>
+      <div class="chart-card" style="border:none;border-radius:0">
+        <div class="cc-body"><div class="plotly-chart" id="ch-radar"></div></div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty rv"><div class="empty-ico">⚖️</div><div class="empty-t">Need 2+ players</div><div class="empty-s">Add entries for at least 2 batsmen to enable comparison</div></div>
+  {% endif %}
+</section>
+
+<!-- ══ MATCH HISTORY ══════════════════════════════════ -->
+<section id="matches">
+  <div class="sec-hd rv"><div class="sec-title">MATCH HISTORY</div><span class="sec-badge">{{ match_list|length }} events</span></div>
+  {% if match_list %}
+  <div class="match-list rv">
+    {% for m in match_list %}
+    <div class="match-row">
+      <div class="mr-date">{{ m.date }}</div>
+      <div class="mr-name">{{ m.name }}</div>
+      <div class="mr-tags">
+        <span class="mr-tag mrt-r">{{ m.runs }} runs</span>
+        <span class="mr-tag mrt-w">{{ m.wickets }} wkts</span>
+        {% if m.sixes %}<span class="mr-tag mrt-6">{{ m.sixes }}×6</span>{% endif %}
+        <span class="mr-tag mrt-e">{{ m.entries }} entries</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty rv"><div class="empty-ico">📅</div><div class="empty-t">No matches yet</div><div class="empty-s">Add entries with match names to see history</div></div>
+  {% endif %}
+</section>
+
+<!-- ══ ENTRY LOG ══════════════════════════════════════ -->
+<section>
+  <div class="sec-hd rv"><div class="sec-title">ENTRY LOG</div><span class="sec-badge">{{ data|length }} records</span></div>
+  {% if data %}
+  <div class="log-list rv">
+    {% for row in data %}
+    <div class="log-item">
+      <div class="log-date">{{ row['match_date'] }}</div>
+      <div class="log-vs"><strong>{{ row['batsman'] }}</strong> vs <strong>{{ row['bowler'] }}</strong>{% if row['match_name'] != 'Match' %} <span style="color:var(--t3)">· {{ row['match_name'] }}</span>{% endif %}</div>
+      <div class="log-tags">
+        <span class="lt lt-r">{{ row['runs'] }}R</span>
+        <span class="lt lt-b">{{ row['balls'] }}B</span>
+        {% if row['wickets'] %}<span class="lt lt-w">{{ row['wickets'] }}W</span>{% endif %}
+        {% if row['fours']   %}<span class="lt lt-4">{{ row['fours'] }}×4</span>{% endif %}
+        {% if row['sixes']   %}<span class="lt lt-6">{{ row['sixes'] }}×6</span>{% endif %}
+      </div>
+      <form action="/delete/{{ row['id'] }}" method="POST" style="margin:0" onsubmit="return confirm('Delete this entry?')">
+        <button type="submit" class="del-btn">✕</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty rv"><div class="empty-ico">📋</div><div class="empty-t">No entries yet</div><div class="empty-s">Use the form above to add your first match record</div></div>
+  {% endif %}
+</section>
+
+<!-- ══ EXPORT BAR ══════════════════════════════════════ -->
+<div class="export-bar rv">
+  <a href="/export" class="btn-export primary">⬇ Export Full CSV</a>
+  <a href="/api/data" target="_blank" class="btn-export">{ } API Endpoint</a>
+  <span class="export-note">{{ data|length }} records · last updated {{ last_updated }}</span>
+</div>
+
+</main>
+
+<!-- ══ SCRIPTS ════════════════════════════════════════ -->
+<script>
+/* ── Plotly config ───────────────────────────────────── */
+const PBG='rgba(0,0,0,0)', PPBG='#0b1018';
+const PF={family:'JetBrains Mono,monospace',color:'#7a98b0',size:10};
+const PG='rgba(255,255,255,0.04)';
+const PL={paper_bgcolor:PBG,plot_bgcolor:PPBG,font:PF,
+  margin:{t:12,r:16,b:40,l:46},showlegend:false,
+  xaxis:{gridcolor:PG,tickfont:PF,tickangle:-30,zeroline:false,linecolor:PG},
+  yaxis:{gridcolor:PG,tickfont:PF,zeroline:false,linecolor:PG}};
+const PC={displayModeBar:false,responsive:true};
+
+const _players={{ players|tojson }};
+const _runs={{ runs_list|tojson }};
+const _sr={{ sr_list|tojson }};
+const _avg={{ avg_list|tojson }};
+const _impact={{ impact_list|tojson }};
+const _bowlers={{ bowlers|tojson }};
+const _wkts={{ wkt_list|tojson }};
+const _eco={{ eco_list|tojson }};
+const _ctrl={{ control_list|tojson }};
+const _sparks=JSON.parse('{{ sparklines|safe }}');
+const _wsparks=JSON.parse('{{ wkt_sparks|safe }}');
+const _trends=JSON.parse('{{ form_trends|safe }}');
+const _batData={}; // built below
+{% for player, s in bat.items() %}
+_batData['{{ player }}']={runs:{{ s.runs }},sr:{{ s.sr }},avg:{{ s.avg }},
+  impact:{{ s.impact }},consistency:{{ s.consistency }},form:{{ s.form }},aggression:{{ s.aggression }}};
+{% endfor %}
+
+/* ── Bar chart builder ──────────────────────────────── */
+function mkBar(el,x,y,col,titleY,textCol){
+  if(!x.length){return}
+  Plotly.newPlot(el,[{x,y,type:'bar',
+    text:y.map(v=>Number.isFinite(v)?v.toFixed?v.toFixed(1):v:''),
+    textposition:'outside',
+    textfont:{color:textCol||col,size:10,family:'JetBrains Mono'},
+    marker:{color:col.replace(')',',0.55)').replace('rgb(','rgba('),
+            line:{color:col.replace(')',',0.25)').replace('rgb(','rgba('),width:1}}}],
+    {...PL,yaxis:{...PL.yaxis,title:titleY}},PC);
+}
+
+/* ── Render charts ──────────────────────────────────── */
+function renderCharts(){
+  if(_players.length){
+    mkBar('ch-runs',_players,_runs,'rgba(245,200,66,1)','Runs','#f5c842');
+    mkBar('ch-sr',_players,_sr,'rgba(34,208,122,1)','Strike Rate','#22d07a');
+    mkBar('ch-impact',_players,_impact,'rgba(79,156,249,1)','Impact Score','#4f9cf9');
+    // Scatter: runs vs SR, size = innings
+    Plotly.newPlot('ch-scatter',[{
+      x:_runs,y:_sr,mode:'markers+text',type:'scatter',
+      text:_players,textposition:'top center',
+      textfont:{size:9,color:'#7a98b0',family:'JetBrains Mono'},
+      marker:{
+        size:_runs.map(r=>Math.max(8,Math.sqrt(r)*1.9)),
+        color:_sr,
+        colorscale:[[0,'#f4415a'],[0.45,'#f5c842'],[1,'#22d07a']],
+        showscale:true,line:{color:'rgba(255,255,255,0.14)',width:1},
+        colorbar:{tickfont:PF,thickness:8,len:.8,title:{text:'SR',font:PF}}
+      }
+    }],{...PL,margin:{t:20,r:90,b:46,l:52},
+      xaxis:{...PL.xaxis,title:{text:'Total Runs',font:PF}},
+      yaxis:{...PL.yaxis,title:{text:'Strike Rate',font:PF}}},PC);
+  }
+  if(_bowlers.length){
+    mkBar('ch-wkt',_bowlers,_wkts,'rgba(244,65,90,1)','Wickets','#f4415a');
+    mkBar('ch-eco',_bowlers,_eco,'rgba(79,156,249,1)','Economy','#4f9cf9');
+  }
+}
+renderCharts();
+
+/* ── Radar chart comparison ─────────────────────────── */
+function renderRadar(p1,p2){
+  if(!_batData[p1]||!_batData[p2]) return;
+  const d1=_batData[p1], d2=_batData[p2];
+  const cats=['Runs','SR','Avg','Impact','Consistency','Form','Aggression'];
+  // Normalise to 0-100
+  const maxV=[Math.max(d1.runs,d2.runs)||1,150,80,100,100,80,100];
+  const n=(v,i)=>Math.min(100,v/maxV[i]*100);
+  const v1=cats.map((_,i)=>n([d1.runs,d1.sr,d1.avg,d1.impact,d1.consistency,d1.form,d1.aggression][i],i));
+  const v2=cats.map((_,i)=>n([d2.runs,d2.sr,d2.avg,d2.impact,d2.consistency,d2.form,d2.aggression][i],i));
+  Plotly.newPlot('ch-radar',[
+    {type:'scatterpolar',r:[...v1,v1[0]],theta:[...cats,cats[0]],fill:'toself',
+     name:p1,line:{color:'#22d07a',width:2},fillcolor:'rgba(34,208,122,0.12)',
+     marker:{color:'#22d07a',size:5}},
+    {type:'scatterpolar',r:[...v2,v2[0]],theta:[...cats,cats[0]],fill:'toself',
+     name:p2,line:{color:'#f5c842',width:2},fillcolor:'rgba(245,200,66,0.10)',
+     marker:{color:'#f5c842',size:5}}
+  ],{paper_bgcolor:PBG,plot_bgcolor:PBG,font:PF,showlegend:true,
+    legend:{font:PF,bgcolor:'rgba(0,0,0,0)',x:.02,y:-.08,orientation:'h'},
+    polar:{bgcolor:'#0b1018',
+      radialaxis:{gridcolor:PG,linecolor:PG,tickfont:{...PF,size:8},range:[0,100]},
+      angularaxis:{gridcolor:PG,linecolor:PG,tickfont:{...PF,size:9}}},
+    margin:{t:20,r:60,b:60,l:60}},PC);
+}
+function renderComparison(){
+  const p1=document.getElementById('cmp-p1')?.value;
+  const p2=document.getElementById('cmp-p2')?.value;
+  if(!p1||!p2||!_batData[p1]||!_batData[p2]) return;
+  renderRadar(p1,p2);
+  // Bar comparison
+  const d1=_batData[p1], d2=_batData[p2];
+  const metrics=[
+    {key:'Impact',v1:d1.impact,v2:d2.impact,max:100},
+    {key:'Consistency',v1:d1.consistency,v2:d2.consistency,max:100},
+    {key:'Form Index',v1:d1.form,v2:d2.form,max:80},
+    {key:'Aggression',v1:d1.aggression,v2:d2.aggression,max:100},
+    {key:'Strike Rate',v1:d1.sr,v2:d2.sr,max:200},
+    {key:'Average',v1:d1.avg,v2:d2.avg,max:80},
+  ];
+  const wrap=document.getElementById('cmp-bars');
+  wrap.innerHTML='<div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-family:var(--mono);font-size:.65rem;color:#22d07a">'+p1+'</span><span style="font-family:var(--mono);font-size:.65rem;color:#f5c842">'+p2+'</span></div>'+
+    metrics.map(m=>{
+      const pct1=Math.min(100,m.v1/m.max*100), pct2=Math.min(100,m.v2/m.max*100);
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:.6rem;color:var(--t3);margin-bottom:5px">
+          <span style="color:#22d07a">${m.v1}</span><span>${m.key}</span><span style="color:#f5c842">${m.v2}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pct1}%;background:#22d07a;border-radius:2px;float:right;transition:width .6s"></div>
+          </div>
+          <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pct2}%;background:#f5c842;border-radius:2px;transition:width .6s"></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+}
+// Init on load
+setTimeout(()=>{
+  if(document.getElementById('cmp-p1')) renderComparison();
+},300);
+
+/* ── Canvas sparklines ──────────────────────────────── */
+function drawSpark(canvas,vals,col){
+  if(!vals||!vals.length) return;
+  const W=canvas.offsetWidth||200, H=36;
+  const dpr=devicePixelRatio||1;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const min=Math.min(...vals), max=Math.max(...vals), range=max-min||1;
+  const pad=4, step=W/(vals.length-1||1);
+  // Area fill
+  const g=ctx.createLinearGradient(0,0,0,H);
+  const hex2rgba=(h,a)=>{const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return `rgba(${r},${g},${b},${a})`};
+  const areaC=col.startsWith('#')?hex2rgba(col,0.15):'rgba(34,208,122,0.10)';
+  g.addColorStop(0,areaC); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();
+  vals.forEach((v,i)=>{const x=i*step,y=H-pad-(v-min)/range*(H-pad*2);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
+  ctx.lineTo((vals.length-1)*step,H); ctx.lineTo(0,H); ctx.closePath();
+  ctx.fillStyle=g; ctx.fill();
+  // Line
+  ctx.beginPath();
+  vals.forEach((v,i)=>{const x=i*step,y=H-pad-(v-min)/range*(H-pad*2);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
+  ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.lineJoin='round'; ctx.stroke();
+  // End dot
+  const lx=(vals.length-1)*step, ly=H-pad-(vals[vals.length-1]-min)/range*(H-pad*2);
+  ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2);
+  ctx.fillStyle=col; ctx.fill();
+}
+function initSparks(){
+  document.querySelectorAll('.spark-canvas').forEach(c=>{
+    try{const v=JSON.parse(c.dataset.vals||'[]');drawSpark(c,v,c.dataset.col||'#22d07a')}catch(e){}
+  });
+}
+window.addEventListener('load',initSparks);
+window.addEventListener('resize',()=>setTimeout(initSparks,120));
+
+/* ── Tab switcher ───────────────────────────────────── */
+function showTab(showId,hideId,btn){
+  document.getElementById(showId).classList.add('on');
+  document.getElementById(hideId).classList.remove('on');
+  btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b=>{
+    b.classList.toggle('on',b===btn);
+  });
+}
+
+/* ── Count-up KPIs ──────────────────────────────────── */
+function countUp(el,target,dur=900){
+  if(!el||!target) return;
+  const s=Date.now();
+  (function t(){
+    const p=Math.min((Date.now()-s)/dur,1),e=1-Math.pow(1-p,3);
+    el.textContent=Math.round(e*target);
+    if(p<1)requestAnimationFrame(t);
+  })();
+}
+setTimeout(()=>{
+  [['k-runs',{{ sm.runs }}],['k-wkts',{{ sm.wickets }}],
+   ['k-matches',{{ sm.matches }}],['k-sixes',{{ sm.sixes }}],
+   ['k-fours',{{ sm.fours }}],
+   ['hc-runs',{{ sm.runs }}],['hc-wkts',{{ sm.wickets }}]
+  ].forEach(([id,v])=>countUp(document.getElementById(id),v));
+},500);
+
+/* ── Scroll progress ────────────────────────────────── */
+const prog=document.getElementById('scroll-prog');
+window.addEventListener('scroll',()=>{
+  const max=document.documentElement.scrollHeight-innerHeight;
+  prog.style.width=(scrollY/max*100).toFixed(2)+'%';
+},{passive:true});
+
+/* ── Scroll reveal ──────────────────────────────────── */
+const io=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);
+    setTimeout(()=>e.target.style.willChange='auto',800);
+  }});
+},{threshold:.06,rootMargin:'0px 0px -12px 0px'});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+
+/* ── Nav active highlight ───────────────────────────── */
+const sections=document.querySelectorAll('section[id],div[id]');
+const navLinks=document.querySelectorAll('.nav-center a');
+const obs=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){
+    navLinks.forEach(a=>{
+      a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id);
+    });
+  }});
+},{threshold:.3});
+sections.forEach(s=>obs.observe(s));
+
+/* ── Smooth scroll ──────────────────────────────────── */
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{
+    const t=document.querySelector(a.getAttribute('href'));
+    if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'})}
+  });
+});
+</script>
+</body>
+</html>
